@@ -288,24 +288,6 @@ void s1c33_cpu_raise_nmi(CPUState *cs)
     cpu_interrupt(cs, S1C33_CPU_INTERRUPT_NMI);
 }
 
-void s1c33_cpu_resume_from_sleep(CPUState *cs, const char *reason)
-{
-    CPUS1C33State *env = cpu_env(cs);
-
-    if (!env->in_sleep) {
-        return;
-    }
-
-    env->in_sleep = false;
-    cs->halted = 0;
-    qemu_log_mask(CPU_LOG_INT,
-                  "s1c33: resume from sleep reason=%s pc=0x%08x "
-                  "psr=0x%08x\n",
-                  reason != NULL ? reason : "external-clock",
-                  env->pc, env->psr);
-    cpu_resume(cs);
-}
-
 hwaddr s1c33_cpu_get_phys_page_debug(CPUState *cs, vaddr addr)
 {
     return addr;

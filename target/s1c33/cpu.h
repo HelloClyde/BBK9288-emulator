@@ -92,7 +92,6 @@ bool s1c33_cpu_exec_interrupt(CPUState *cs, int interrupt_request);
 void s1c33_cpu_set_irq(CPUState *cs, bool pending, uint8_t vector,
                        uint8_t level);
 void s1c33_cpu_raise_nmi(CPUState *cs);
-void s1c33_cpu_resume_from_sleep(CPUState *cs, const char *reason);
 hwaddr s1c33_cpu_get_phys_page_debug(CPUState *cs, vaddr addr);
 void s1c33_cpu_dump_state(CPUState *cs, FILE *f, int flags);
 int s1c33_cpu_gdb_read_register(CPUState *cpu, GByteArray *buf, int reg);

@@ -162,6 +162,14 @@ Implemented pieces:
   wake it. QEMU now reports guest shutdown so the Web panel shows the device as
   off and its power button can start it again. ROM idle HALTs with interrupts
   enabled continue to wake normally.
+- In the observed no-input run, the 9288 firmware enters SLEEP at IRAM
+  `0x00002214` after roughly 10 minutes. Timer 1 uses the stopped OSC3 clock
+  as a stabilization delay
+  *after* an NMI, port, or clock-timer wake. Its underflow is not itself a
+  SLEEP wake source. The previous model incorrectly resumed the CPU on timer 1
+  underflow even with `EIR5=0`, sending it through a partial boot and into a
+  terminal HALT at `0x021351ea`. The timer now waits while OSC3 is stopped.
+  See the [S1C33L05 clock-generator procedure](https://www.epson.jp/prod/semicon/pdf/id000446.pdf).
 - `debug-usb-wakeup-ms` machine property, disabled by default, can set the USB
   interrupt factor after a host-time delay for wakeup testing.
 - `debug-port4-wakeup-ms` machine property, disabled by default, can set the

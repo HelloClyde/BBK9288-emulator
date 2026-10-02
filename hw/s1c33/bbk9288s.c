@@ -188,7 +188,6 @@ OBJECT_DECLARE_SIMPLE_TYPE(BBK9288SMachineState, BBK9288S_MACHINE)
 #define BBK9288S_16TM4B_VECTOR  46
 #define BBK9288S_8TM0_VECTOR    52
 #define BBK9288S_8TM0_3_MASK    0x0f
-#define BBK9288S_8TM1_IRQ_BIT   0x02
 #define BBK9288S_8TM_CTRL_BASE  0x0160
 #define BBK9288S_8TM_STRIDE     4
 #define BBK9288S_8TM_CHANNELS   4
@@ -254,7 +253,6 @@ OBJECT_DECLARE_SIMPLE_TYPE(BBK9288SMachineState, BBK9288S_MACHINE)
 #define BBK9288S_CLG_PRESCALER  0x0181
 #define BBK9288S_CLG_CLOCK_OPT  0x0190
 #define BBK9288S_CLG_PROTECT    0x019e
-#define BBK9288S_CLOCK_OPT_8T1ON_OFF 0x04
 #define BBK9288S_PIR_CTM        0x026b
 #define BBK9288S_CTM_IRQ_BIT    0x02
 #define BBK9288S_CTM_VECTOR     65
@@ -2617,24 +2615,6 @@ static uint8_t bbk9288s_timer8_running_mask(BBK9288SState *s)
     return running;
 }
 
-static bool bbk9288s_timer8_sleep_resume_enabled(BBK9288SState *s,
-                                                 uint8_t underflow)
-{
-    S1C33CPU *cpu;
-
-    if ((underflow & BBK9288S_8TM1_IRQ_BIT) == 0 || s->cpu == NULL) {
-        return false;
-    }
-
-    cpu = S1C33_CPU(s->cpu);
-    if (!cpu->env.in_sleep) {
-        return false;
-    }
-
-    return (s->io_regs[BBK9288S_CLG_CLOCK_OPT] &
-            BBK9288S_CLOCK_OPT_8T1ON_OFF) == 0;
-}
-
 static uint64_t bbk9288s_timer8_period_ns(BBK9288SState *s,
                                           unsigned channel)
 {
@@ -2707,7 +2687,10 @@ static void bbk9288s_timer8_underflow(BBK9288SState *s, unsigned channel)
                         channel * BBK9288S_8TM_STRIDE + 1;
     hwaddr count_reg = reload_reg + 1;
     uint8_t underflow = 1u << channel;
-    bool sleep_resume = bbk9288s_timer8_sleep_resume_enabled(s, underflow);
+    bool osc3_stopped = channel == 1 && s->cpu != NULL &&
+                        S1C33_CPU(s->cpu)->env.in_sleep &&
+                        (s->io_regs[BBK9288S_PRESCALER_CLOCK_SELECT] &
+                         BBK9288S_PRESCALER_OSC1) == 0;
 
     if (!bbk9288s_timer8_channel_running(s, channel)) {
         if (s->timer8_underflow_timer[channel] != NULL) {
@@ -2716,23 +2699,28 @@ static void bbk9288s_timer8_underflow(BBK9288SState *s, unsigned channel)
         return;
     }
 
+    /*
+     * Timer 1 is the OSC3 stabilization delay *after* an NMI, port, or
+     * clock-timer interrupt releases SLEEP.  OSC3 is stopped while sleeping,
+     * so its underflow cannot be the event that releases SLEEP.  Poll slowly
+     * until an actual wake occurs, then continue normal timer accounting.
+     */
+    if (osc3_stopped) {
+        timer_mod_ns(s->timer8_underflow_timer[channel],
+                     qemu_clock_get_ns(QEMU_CLOCK_REALTIME) +
+                     10 * SCALE_MS);
+        return;
+    }
+
     s->io_regs[count_reg] = s->io_regs[reload_reg];
     s->io_regs[BBK9288S_FIR5_8TM0_3] |= underflow;
-    if (s->trace_io || sleep_resume) {
+    if (s->trace_io) {
         qemu_log_mask(LOG_GUEST_ERROR,
                       "bbk9288s-timer: 8tm%u underflow factor set "
                       "reload=0x%02x eir=0x%02x fir=0x%02x\n",
                       channel, s->io_regs[reload_reg],
                       s->io_regs[BBK9288S_EIR5_8TM0_3],
                       s->io_regs[BBK9288S_FIR5_8TM0_3]);
-    }
-    if (sleep_resume) {
-        qemu_log_mask(LOG_GUEST_ERROR,
-                      "bbk9288s-timer: 8tm1 underflow releases sleep "
-                      "clock-opt=0x%02x eir=0x%02x\n",
-                      s->io_regs[BBK9288S_CLG_CLOCK_OPT],
-                      s->io_regs[BBK9288S_EIR5_8TM0_3]);
-        s1c33_cpu_resume_from_sleep(s->cpu, "8tm1-osc3-stabilize");
     }
     bbk9288s_update_irq(s);
     timer_mod_ns(s->timer8_underflow_timer[channel],
