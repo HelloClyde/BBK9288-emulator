@@ -3,9 +3,8 @@
 这是基于 QEMU 11.0 实现的 BBK 9288 硬件模拟器，模拟 Epson S1C33L05
 处理器、`320 × 240` 横屏、53 键矩阵、NAND、音频及相关板级硬件。
 
-源码仓库不包含步步高原厂固件、系统文件或 NAND 镜像。运行前请自行准备
-有权使用的 9288 V1.5 NAND；Windows 便携发布包也应将这些文件作为独立资产
-提供，不写入 Git 历史。
+源码仓库和模拟器 ZIP 不包含步步高原厂固件或 NAND 镜像。本项目的 Release
+将测试用 NAND 与真机采集页作为独立资产提供，不写入 Git 历史。
 
 ## 效果预览
 
@@ -27,6 +26,8 @@
 - NAND 按脏块增量回写，每 250 ms 同步一次；即使模拟器被强制结束，已经完成
   的页编程和块擦除也不会等到正常退出才落盘。
 - 从 NAND 中递归定位并加载 `kernel.bin`。
+- 可用 `-bios` 从复位地址执行原机引导 ROM，经 NAND ECC 校验和物理页加载进入第二阶段；
+  NAND ID 可通过 `nand-id` 指定。此前的 FAT 内核直接加载仍可使用。
 - V1.5 完整文件树：根目录 `kernel.bin`、`mp3`、`系统`，共 260 个文件、
   156,310,685 字节。
 - 8 行 × 7 列原机键盘矩阵：`0x00300F46` 行选通、K5/P0 七路列输入、
@@ -47,16 +48,52 @@ NAND 是可写的，并在运行过程中增量保存。
 
 ## 快速开始
 
-1. 从 [v9288-0.1.2 Release](https://github.com/HelloClyde/bbk9288-emulator/releases/tag/v9288-0.1.2)
-   下载 `bbk9288-emulator-v9288-0.1.2-windows-x64.zip` 和
-   `bbk9288-v1.5-nand.zip`。
+1. 从 [v9288-0.2.0 Release](https://github.com/HelloClyde/bbk9288-emulator/releases/tag/v9288-0.2.0)
+   下载 `bbk9288-emulator-v9288-0.2.0-windows-x64.zip` 和
+   `bbk9288-native-boot-nand-v9288-0.2.0.zip`。
 2. 先解压模拟器 ZIP，再把 NAND ZIP 解压到同一个目录；合并其中的
    `runtime` 文件夹即可，不需要改名或移动文件。
-3. 双击 `run-bbk9288-web.cmd`。启动后浏览器访问
+3. 双击 `run-bbk9288-web.cmd`。默认从 `runtime/BOOT0.BIN` 执行原机 ROM，
+   经真实 NAND 引导页显示原厂启动画面，再进入词典桌面。浏览器访问
    `http://127.0.0.1:8000/`，点击网页中的扬声器按钮可开启声音。
 
 发布包已包含 Python 运行时、Python 依赖、Web 静态资源、QEMU 运行库和
 `ffplay`，不需要安装 Python、npm 或其他依赖。关闭启动命令窗口即可停止模拟器。
+
+## 原机引导 ROM
+
+默认启动器要求 `runtime/BOOT0.BIN` 和 `runtime/nand-user.raw`；上面的 NAND
+ZIP 包含这两个文件。NAND 镜像混合了真机采集的物理页 0～127、256～1919
+与 9288 V1.5 文件系统数据，并为后者补齐 OOB ECC；它不是整片真机 NAND dump。
+模拟器会保存客机对 NAND 的写入，重新开始测试可再次解压 NAND ZIP。
+
+```powershell
+.\run-bbk9288-web.ps1
+```
+
+桌面窗口同样可运行 `.\run-bbk9288.ps1`。两个启动器都自动选择
+`runtime/BOOT0.BIN`，默认报告实机采集到的 NAND ID `AD DA 80 15`；其他芯片
+可用 `-NandId 0x12345678` 覆盖。旧镜像可显式使用 `-DirectKernelBoot` 绕过
+原机引导。直接调用 QEMU 时使用
+`-M bbk9288,nand-image=<副本>,nand-id=0xADDA8015 -bios <BOOT0.BIN>`。
+旧模拟器镜像的 FAT 页缺少 OOB ECC，会让原厂内核误判文件系统损坏。
+`scripts/prepare_native_boot_nand.py` 从基础镜像和 Release 提供的真机页 BIN
+创建正确的本地镜像；已验证从真实 ROM 进入词典主菜单及日期设置弹窗。
+
+![真机 ROM 引导后的词典主菜单](docs/assets/bbk9288-native-boot-desktop.png)
+
+当前工作区可用以下命令重建一份干净的本地测试镜像；输出文件必须尚不存在：
+
+```powershell
+python .\scripts\prepare_native_boot_nand.py `
+  --base ..\BBK9288模拟器\nand-user.raw `
+  --boot-pages ..\9288-boot-capture\captures\2026-10-02-v5\NAND_BOOT_128.BIN `
+  --kernel-pages ..\9288-boot-capture\captures\2026-10-02-v7\P2561919.BIN `
+  --output .\runtime\nand-user.raw
+Copy-Item ..\9288-boot-capture\captures\2026-10-01-v3\BOOT0.BIN `
+  .\runtime\BOOT0.BIN
+.\run-bbk9288-web.ps1
+```
 
 ## Web 前端功能
 

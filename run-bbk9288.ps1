@@ -1,5 +1,9 @@
 ﻿param(
     [string]$Nand,
+    [string]$BootRom,
+    [switch]$DirectKernelBoot,
+    [ValidatePattern('^0[xX][0-9A-Fa-f]{8}$')]
+    [string]$NandId,
     [string]$AudioPlayer,
     [switch]$NoAudio,
     [switch]$TraceIo,
@@ -77,6 +81,31 @@ if ($isSourceBuild) {
 
 $nandPath = (Resolve-Path -LiteralPath $Nand).Path.Replace("\", "/")
 $machine = "bbk9288,nand-image=$nandPath"
+if ($DirectKernelBoot -and $BootRom) {
+    throw "-DirectKernelBoot cannot be combined with -BootRom"
+}
+if (-not $DirectKernelBoot -and [string]::IsNullOrWhiteSpace($BootRom)) {
+    $BootRom = @(
+        (Join-Path $PSScriptRoot "runtime\BOOT0.BIN"),
+        (Join-Path $PSScriptRoot "BOOT0.BIN")
+    ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($BootRom)) {
+        throw "Native boot requires runtime\BOOT0.BIN; download and extract the native NAND release asset. Use -DirectKernelBoot only for legacy images."
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($BootRom)) {
+    if (-not (Test-Path -LiteralPath $BootRom -PathType Leaf)) {
+        throw "找不到 9288 引导 ROM：$BootRom"
+    }
+    $BootRom = (Resolve-Path -LiteralPath $BootRom).Path.Replace("\", "/")
+    if ([string]::IsNullOrWhiteSpace($NandId)) {
+        $NandId = '0xADDA8015'
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($NandId)) {
+    $machine += ",nand-id=$NandId"
+}
 if (-not $NoAudio) {
     if ([string]::IsNullOrWhiteSpace($AudioPlayer)) {
         $AudioPlayer = @(
@@ -103,7 +132,6 @@ if (-not $NoAudio) {
 if ($TraceIo) {
     $machine += ",trace-io=on,trace-key-scan=on"
 }
-
 $qmpPort = Get-FreeTcpPort
 $qemuArgs = @(
     "-M", $machine,
@@ -114,6 +142,9 @@ $qemuArgs = @(
     "-qmp", "tcp:127.0.0.1:$qmpPort,server=on,wait=off",
     "-rtc", "base=localtime"
 )
+if (-not [string]::IsNullOrWhiteSpace($BootRom)) {
+    $qemuArgs += @('-bios', $BootRom)
+}
 if ($TraceIo) {
     $logDir = Join-Path $PSScriptRoot "runtime\logs"
     New-Item -ItemType Directory -Force -Path $logDir | Out-Null

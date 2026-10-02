@@ -65,15 +65,19 @@ Copy-Item -LiteralPath (Join-Path $root "scripts\bbk9288_web_server.py") `
     -Destination (Join-Path $output "scripts")
 Copy-Item -LiteralPath (Join-Path $root "scripts\bbk9288s_nand_image.py") `
     -Destination (Join-Path $output "scripts")
+Copy-Item -LiteralPath (Join-Path $root "scripts\prepare_native_boot_nand.py") `
+    -Destination (Join-Path $output "scripts")
 Copy-Item -LiteralPath (Join-Path $root "pc-bios\keymaps\en-us") `
     -Destination (Join-Path $output "share\keymaps")
 
 $runtimeReadme = @"
-将有权使用的 BBK 9288 NAND 镜像放在本目录：
+Native boot requires both files in this directory:
 
-  nand-user.raw    带 OOB 的原始 NAND 镜像
+  nand-user.raw    Raw 9288 NAND image with data and OOB ECC
+  BOOT0.BIN        Decoded 240-byte 9288 boot ROM
 
-发布包不包含原厂固件、系统文件或 NAND 镜像。
+Download the native NAND release ZIP and extract its runtime folder over this one.
+The emulator saves guest NAND writes to nand-user.raw; retain the ZIP as a backup.
 "@
 Set-Content -LiteralPath (Join-Path $output "runtime\README.txt") `
     -Value $runtimeReadme -Encoding utf8

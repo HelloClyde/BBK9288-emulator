@@ -10,6 +10,7 @@ from functools import partial
 import json
 import os
 from pathlib import Path, PurePosixPath
+import re
 import shutil
 import signal
 import socket
@@ -77,6 +78,8 @@ class QemuController:
         root: Path,
         executable: Path,
         nand: Path,
+        boot_rom: Path | None,
+        nand_id: str | None,
         websocket_port: int,
         qmp_port: int,
         log_path: Path,
@@ -86,6 +89,8 @@ class QemuController:
         self.root = root
         self.executable = executable
         self.nand = nand
+        self.boot_rom = boot_rom
+        self.nand_id = nand_id
         self.websocket_port = websocket_port
         self.qmp_port = qmp_port
         self.log_path = log_path
@@ -148,16 +153,19 @@ class QemuController:
         self.log_path.parent.mkdir(parents=True, exist_ok=True)
         self._log_start = self.log_path.stat().st_size if self.log_path.exists() else 0
         self._log = self.log_path.open("ab", buffering=0)
+        machine = (
+            f"bbk9288,nand-image={self._relative(self.nand)},"
+            f"audio-stream={self._relative(self.audio_stream_path)},"
+            f"usb-connected={'on' if self.usb_connected else 'off'}"
+        )
+        if self.nand_id:
+            machine += f",nand-id={self.nand_id}"
         args = [
             str(self.executable),
             "-name",
             "BBK 9288 Web",
             "-machine",
-            (
-                f"bbk9288,nand-image={self._relative(self.nand)},"
-                f"audio-stream={self._relative(self.audio_stream_path)},"
-                f"usb-connected={'on' if self.usb_connected else 'off'}"
-            ),
+            machine,
             "-cpu",
             "c33l05,exit-on-halt=off",
             "-rtc",
@@ -174,6 +182,8 @@ class QemuController:
             "-monitor",
             "none",
         ]
+        if self.boot_rom:
+            args.extend(["-bios", self._relative(self.boot_rom)])
         data_dir = self.root / "share"
         if data_dir.is_dir():
             args[1:1] = ["-L", self._relative(data_dir)]
@@ -396,7 +406,8 @@ class NandWorkspace:
             raise ApiError("NAND 维护模式尚未开启", HTTPStatus.CONFLICT)
         if self.dirty:
             patch_gbk_short_names(self.flat_path)
-            pack_image(self.flat_path, self.nand_path)
+            pack_image(self.flat_path, self.nand_path,
+                       preserve_boot_from=self.nand_path)
         self.flat_path.unlink(missing_ok=True)
         self.active = False
         self.dirty = False
@@ -861,6 +872,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--qemu", type=Path)
     parser.add_argument("--runtime-dir", type=Path)
     parser.add_argument("--nand", type=Path)
+    parser.add_argument("--boot-rom", type=Path)
+    parser.add_argument("--direct-kernel-boot", action="store_true")
+    parser.add_argument("--nand-id")
     parser.add_argument("--flat", type=Path)
     parser.add_argument("--dist", type=Path)
     return parser
@@ -890,6 +904,20 @@ def main() -> int:
         or root / "build/qemu-system-s1c33.exe"
     ).resolve()
     nand_path = (args.nand or runtime_dir / "nand-user.raw").resolve()
+    if args.direct_kernel_boot and args.boot_rom:
+        raise ValueError("--direct-kernel-boot cannot be combined with --boot-rom")
+    boot_rom_path = None
+    if not args.direct_kernel_boot:
+        candidate = args.boot_rom or runtime_dir / "BOOT0.BIN"
+        boot_rom_path = candidate.resolve()
+        if not boot_rom_path.is_file():
+            raise FileNotFoundError(
+                f"native boot ROM is missing: {boot_rom_path}; "
+                "extract the native NAND release asset into runtime/"
+            )
+    nand_id = args.nand_id or ("0xADDA8015" if boot_rom_path else None)
+    if nand_id and not re.fullmatch(r"0[xX][0-9a-fA-F]{8}", nand_id):
+        raise ValueError("--nand-id must contain four hexadecimal bytes")
     flat_path = (
         args.flat or runtime_dir / "nand-manager.fat.img"
     ).resolve()
@@ -898,7 +926,9 @@ def main() -> int:
     audio_stream_path = runtime_dir / "web-audio-stream.mp3"
     settings_path = runtime_dir / "settings.json"
 
-    for path in (qemu_path, nand_path, dist_path):
+    for path in (qemu_path, nand_path, dist_path, boot_rom_path):
+        if path is None:
+            continue
         if not path.exists():
             raise FileNotFoundError(f"required path is missing: {path}")
 
@@ -906,6 +936,8 @@ def main() -> int:
         root,
         qemu_path,
         nand_path,
+        boot_rom_path,
+        nand_id,
         args.websocket_port,
         args.qmp_port,
         log_path,

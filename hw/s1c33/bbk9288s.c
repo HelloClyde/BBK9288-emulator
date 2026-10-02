@@ -89,8 +89,7 @@ OBJECT_DECLARE_SIMPLE_TYPE(BBK9288SMachineState, BBK9288S_MACHINE)
 #define BBK9288S_NAND_CLE       0x10
 #define BBK9288S_NAND_ALE       0x20
 #define BBK9288S_NAND_READY     0x40
-#define BBK9288S_NAND_MFR_ID    0xec
-#define BBK9288S_NAND_DEVICE_ID 0xda
+#define BBK9288S_NAND_DEFAULT_ID 0xecda1095u
 #define BBK9288S_NAND_PAGE_SIZE 2048
 #define BBK9288S_NAND_OOB_SIZE  64
 #define BBK9288S_NAND_RAW_PAGE_SIZE \
@@ -343,6 +342,7 @@ struct BBK9288SMachineState {
     uint32_t touch_k5_low_mask;
     char *debug_lcd_dump_path;
     char *nand_image_path;
+    uint32_t nand_id;
     char *audio_stream_path;
     char *audio_player_path;
     bool usb_connected;
@@ -467,6 +467,8 @@ typedef struct BBK9288SState {
     uint8_t nand_address[5];
     uint8_t nand_address_count;
     uint8_t nand_id_index;
+    uint16_t nand_ecc_count;
+    uint32_t nand_id;
     uint32_t nand_page;
     uint16_t nand_column;
     uint8_t nand_page_cache[BBK9288S_NAND_RAW_PAGE_SIZE];
@@ -520,6 +522,7 @@ typedef struct BBK9288SState {
     uint16_t audio_io_size;
     bool has_touchscreen;
     bool is_9288;
+    bool native_boot;
     bool touch_p0_low;
     bool touch_down;
     bool debug_timer16_factors;
@@ -4369,6 +4372,44 @@ static uint64_t bbk9288s_touch_io_read(void *opaque, hwaddr offset,
     return value;
 }
 
+/* S1C33L05 NAND interface: two 256-byte parity areas per 512-byte cycle. */
+static void bbk9288s_nand_ecc_byte(BBK9288SState *s, uint8_t value)
+{
+    static const uint8_t column_masks[] = {
+        0x55, 0xaa, 0x33, 0xcc, 0x0f, 0xf0,
+    };
+    unsigned count, index, area, base, bit;
+    uint16_t line;
+    uint8_t column;
+    bool parity;
+
+    if (!(s->touch_io_regs[BBK9288S_NAND_ECC_ENABLE] & 1) ||
+        s->nand_ecc_count == 512) {
+        return;
+    }
+
+    count = ++s->nand_ecc_count;
+    index = count - 1; /* ECC line parity addresses bytes 0..255. */
+    area = index / 256;
+    base = BBK9288S_NAND_ECC_BASE + area * 3;
+    column = s->touch_io_regs[base];
+    line = s->touch_io_regs[base + 1] |
+           (uint16_t)s->touch_io_regs[base + 2] << 8;
+    parity = ctpop8(value) & 1;
+    for (bit = 0; bit < ARRAY_SIZE(column_masks); bit++) {
+        column ^= (ctpop8(value & column_masks[bit]) & 1) << (bit + 2);
+    }
+    for (bit = 0; bit < 8; bit++) {
+        line ^= (uint16_t)parity << (bit * 2 + ((index >> bit) & 1));
+    }
+    s->touch_io_regs[base] = column;
+    s->touch_io_regs[base + 1] = line;
+    s->touch_io_regs[base + 2] = line >> 8;
+    if (count == 512) {
+        s->touch_io_regs[BBK9288S_NAND_ECC_READY] = 1;
+    }
+}
+
 static void bbk9288s_touch_io_write_byte(BBK9288SState *s, hwaddr offset,
                                          uint8_t value)
 {
@@ -4378,8 +4419,9 @@ static void bbk9288s_touch_io_write_byte(BBK9288SState *s, hwaddr offset,
         if (value & 1) {
             memset(&s->touch_io_regs[BBK9288S_NAND_ECC_BASE], 0xff,
                    BBK9288S_NAND_ECC_SIZE);
+            s->nand_ecc_count = 0;
+            s->touch_io_regs[offset] = 0;
         }
-        s->touch_io_regs[offset] = 1;
         return;
     }
     if (s->is_9288 && offset == BBK9288_KEY_ROW_SELECT) {
@@ -5517,7 +5559,7 @@ static void bbk9288s_touch_io_reset(BBK9288SState *s)
     memset(s->touch_io_regs, 0, sizeof(s->touch_io_regs));
     s->touch_io_regs[BBK9288_KEY_ROW_SELECT] = 0xff;
     s->touch_io_regs[BBK9288S_NAND_CE_SELECT] = 0x80;
-    s->touch_io_regs[BBK9288S_NAND_ECC_READY] = 1;
+    s->touch_io_regs[BBK9288S_NAND_ECC_READY] = 0;
     memset(&s->touch_io_regs[BBK9288S_NAND_ECC_BASE], 0xff,
            BBK9288S_NAND_ECC_SIZE);
     s->touch_serial_logged_channels = 0;
@@ -5531,6 +5573,7 @@ static void bbk9288s_nand_reset(BBK9288SState *s)
     s->nand_command = 0xff;
     s->nand_address_count = 0;
     s->nand_id_index = 0;
+    s->nand_ecc_count = 0;
     s->nand_page = 0;
     s->nand_column = 0;
     memset(s->nand_page_cache, 0xff, sizeof(s->nand_page_cache));
@@ -5775,14 +5818,10 @@ static void bbk9288s_nand_address(BBK9288SState *s, uint8_t value)
 
 static uint8_t bbk9288s_nand_data_read_byte(BBK9288SState *s)
 {
-    static const uint8_t id[] = {
-        BBK9288S_NAND_MFR_ID, BBK9288S_NAND_DEVICE_ID, 0x10, 0x95,
-    };
-
     switch (s->nand_phase) {
     case BBK9288S_NAND_READ_ID:
-        if (s->nand_id_index < ARRAY_SIZE(id)) {
-            return id[s->nand_id_index++];
+        if (s->nand_id_index < 4) {
+            return s->nand_id >> (24 - 8 * s->nand_id_index++);
         }
         return 0xff;
     case BBK9288S_NAND_READ_STATUS:
@@ -5797,6 +5836,7 @@ static uint8_t bbk9288s_nand_data_read_byte(BBK9288SState *s)
 
             value = s->nand_storage[offset];
         }
+        bbk9288s_nand_ecc_byte(s, value);
         s->nand_data_reads++;
         s->nand_column++;
         return value;
@@ -5820,6 +5860,7 @@ static void bbk9288s_nand_data_write_byte(BBK9288SState *s, uint8_t value)
     }
 
     s->nand_page_cache[s->nand_column] = value;
+    bbk9288s_nand_ecc_byte(s, value);
     s->nand_data_writes++;
     s->nand_column++;
 }
@@ -6369,6 +6410,10 @@ static void bbk9288s_lcdc_io_reset(BBK9288SState *s)
     memset(s->lcdc_regs, 0, sizeof(s->lcdc_regs));
     memset(s->lcdc_seen, 0, sizeof(s->lcdc_seen));
 
+    if (s->native_boot) {
+        return;
+    }
+
     /*
      * The board loader starts the KNL image directly without running the
      * original boot ROM. Seed the panel geometry, stock 2bpp mode, and the
@@ -6461,6 +6506,31 @@ static void bbk9288s_load_kernel_file(BBK9288SState *s, S1C33CPU *cpu,
                               filename, ram_size);
 }
 
+static void bbk9288s_load_boot_rom(BBK9288SState *s, S1C33CPU *cpu,
+                                   const char *filename)
+{
+    g_autofree gchar *data = NULL;
+    gsize len = 0;
+    GError *gerr = NULL;
+
+    if (!g_file_get_contents(filename, &data, &len, &gerr)) {
+        error_report("could not load boot ROM '%s': %s", filename,
+                     gerr->message);
+        g_error_free(gerr);
+        exit(1);
+    }
+    if (len == 0 || len > BBK9288S_IRAM_SIZE) {
+        error_report("boot ROM '%s' must be 1 to %zu bytes (got %zu)",
+                     filename, (size_t)BBK9288S_IRAM_SIZE, (size_t)len);
+        exit(1);
+    }
+
+    rom_add_blob_fixed("bbk9288.boot-rom", data, len, 0);
+    cpu_set_pc(CPU(cpu), 0);
+    info_report("%s boot: executing ROM '%s' (%zu bytes) at 0x00000000",
+                bbk9288s_model_name(s), filename, (size_t)len);
+}
+
 static void bbk9288s_init(MachineState *machine)
 {
     BBK9288SMachineState *bms = BBK9288S_MACHINE(machine);
@@ -6470,10 +6540,23 @@ static void bbk9288s_init(MachineState *machine)
     gsize nand_kernel_len = 0;
     MemoryRegion *sysmem = get_system_memory();
     MemoryRegion *iram = g_new(MemoryRegion, 1);
-    const char *kernel = machine->kernel_filename ? machine->kernel_filename :
-                                                 machine->firmware;
+    const char *kernel = machine->kernel_filename;
+    const char *boot_rom = machine->firmware;
+
+    if (kernel != NULL && boot_rom != NULL) {
+        error_report("-kernel and -bios select different BBK boot paths; "
+                     "specify only one");
+        exit(1);
+    }
+    if (boot_rom != NULL && bms->nand_image_path == NULL) {
+        error_report("BBK native boot requires -M "
+                     "bbk9288,nand-image=<raw NAND image>");
+        exit(1);
+    }
 
     s->is_9288 = bms->is_9288;
+    s->nand_id = bms->nand_id;
+    s->native_boot = boot_rom != NULL;
     s->lcd_width = bms->is_9288 ? BBK9288_LCD_WIDTH : BBK9288S_LCD_WIDTH;
     s->lcd_height = bms->is_9288 ? BBK9288_LCD_HEIGHT : BBK9288S_LCD_HEIGHT;
     s->audio_io_size =
@@ -6554,7 +6637,9 @@ static void bbk9288s_init(MachineState *machine)
     cpu->env.sp = BBK9288S_BOOT_STACK_TOP;
     bbk9288s_set_ttbr(s, BBK9288S_SDRAM_BASE);
 
-    if (kernel) {
+    if (boot_rom) {
+        bbk9288s_load_boot_rom(s, cpu, boot_rom);
+    } else if (kernel) {
         bbk9288s_load_kernel_file(s, cpu, kernel, machine->ram_size);
     } else {
         nand_kernel = bbk9288s_nand_extract_kernel(
@@ -6763,6 +6848,7 @@ static void bbk9288s_machine_instance_init(Object *obj)
     bms->touch_k5_low_mask = 0;
     bms->debug_lcd_dump_path = g_strdup("bbk9288s-lcd.pgm");
     bms->nand_image_path = NULL;
+    bms->nand_id = BBK9288S_NAND_DEFAULT_ID;
     bms->audio_stream_path = NULL;
     bms->audio_player_path = NULL;
     bms->usb_connected = true;
@@ -6853,6 +6939,11 @@ static void bbk9288s_machine_instance_init(Object *obj)
     object_property_set_description(obj, "nand-image",
                                     "Persistent raw 256 MiB NAND image, "
                                     "including 64-byte OOB per 2 KiB page");
+    object_property_add_uint32_ptr(obj, "nand-id", &bms->nand_id,
+                                   OBJ_PROP_FLAG_READWRITE);
+    object_property_set_description(obj, "nand-id",
+                                    "Four NAND ID bytes, most significant "
+                                    "byte first (default 0xecda1095)");
     object_property_add_str(obj, "audio-stream",
                             bbk9288s_get_audio_stream_path,
                             bbk9288s_set_audio_stream_path);

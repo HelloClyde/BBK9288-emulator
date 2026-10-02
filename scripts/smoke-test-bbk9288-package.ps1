@@ -23,6 +23,7 @@ $required = @(
     (Join-Path $package "web\dist\index.html"),
     (Join-Path $package "scripts\bbk9288_web_server.py"),
     (Join-Path $package "scripts\bbk9288s_nand_image.py"),
+    (Join-Path $package "scripts\prepare_native_boot_nand.py"),
     (Join-Path $dataDir "keymaps\en-us")
 )
 
@@ -70,7 +71,8 @@ if ($LASTEXITCODE -ne 0) {
 
 & $python -m py_compile `
     (Join-Path $package "scripts\bbk9288_web_server.py") `
-    (Join-Path $package "scripts\bbk9288s_nand_image.py")
+    (Join-Path $package "scripts\bbk9288s_nand_image.py") `
+    (Join-Path $package "scripts\prepare_native_boot_nand.py")
 if ($LASTEXITCODE -ne 0) {
     throw "Packaged Python scripts failed syntax validation"
 }

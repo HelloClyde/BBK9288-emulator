@@ -31,6 +31,18 @@ FLAT_IMAGE_SIZE = LOGICAL_SECTORS * SECTOR_SIZE
 PARTITION_LBA = 32
 ERASED_CHUNK = b"\xff" * (1024 * 1024)
 ERASED_LOGICAL_BLOCK = b"\xff" * BLOCK_DATA_SIZE
+ERASED_ECC_AREA = b"\xff" * 256
+ECC_PARITY = tuple(value.bit_count() & 1 for value in range(256))
+ECC_COLUMN_MASKS = (0x55, 0xAA, 0x33, 0xCC, 0x0F, 0xF0)
+ECC_COLUMN = tuple(
+    sum(((value & mask).bit_count() & 1) << (bit + 2)
+        for bit, mask in enumerate(ECC_COLUMN_MASKS))
+    for value in range(256)
+)
+ECC_LINE = tuple(
+    sum(1 << (bit * 2 + ((index >> bit) & 1)) for bit in range(8))
+    for index in range(256)
+)
 
 
 def fill_erased(file: BinaryIO, size: int) -> None:
@@ -143,17 +155,45 @@ def extract_image(nand_path: Path, flat_path: Path) -> dict[int, int]:
     return mappings
 
 
-def make_oob(logical_block: int) -> bytes:
+def ecc256(data: bytes) -> bytes:
+    if len(data) != 256:
+        raise ValueError("ECC area must contain 256 bytes")
+    if data == ERASED_ECC_AREA:
+        return b"\xff\xff\xff"
+    column = 0xff
+    line = 0xffff
+    for index, value in enumerate(data):
+        column ^= ECC_COLUMN[value]
+        if ECC_PARITY[value]:
+            line ^= ECC_LINE[index]
+    return bytes((line & 0xff, line >> 8, column))
+
+
+def make_oob(logical_block: int, page_data: bytes) -> bytes:
+    if len(page_data) != PAGE_DATA_SIZE:
+        raise ValueError("NAND page must contain 2048 data bytes")
     tag = (logical_block << 1) | (logical_block.bit_count() & 1)
-    slot = bytearray(b"\xff" * 16)
-    slot[1] = 0
-    struct.pack_into("<H", slot, 6, tag)
-    struct.pack_into("<H", slot, 11, tag)
-    return bytes(slot) * SECTORS_PER_PAGE
+    oob = bytearray(b"\xff" * PAGE_OOB_SIZE)
+    for sector in range(SECTORS_PER_PAGE):
+        slot = sector * 16
+        data = page_data[sector * SECTOR_SIZE:(sector + 1) * SECTOR_SIZE]
+        oob[slot + 1] = 0
+        struct.pack_into("<H", oob, slot + 6, tag)
+        struct.pack_into("<H", oob, slot + 11, tag)
+        # The two 256-byte ECC codes occupy OOB bytes 8..10 and 13..15.
+        oob[slot + 8:slot + 11] = ecc256(data[256:512])
+        oob[slot + 13:slot + 16] = ecc256(data[:256])
+    return bytes(oob)
 
 
-def pack_image(flat_path: Path, nand_path: Path) -> int:
+def pack_image(
+    flat_path: Path,
+    nand_path: Path,
+    preserve_boot_from: Path | None = None,
+) -> int:
     validate_flat_image(flat_path)
+    if preserve_boot_from is not None:
+        check_raw_size(preserve_boot_from)
     nand_path.parent.mkdir(parents=True, exist_ok=True)
     temp_path = nand_path.with_name(nand_path.name + ".tmp")
     used_blocks = 0
@@ -161,6 +201,10 @@ def pack_image(flat_path: Path, nand_path: Path) -> int:
     try:
         with temp_path.open("wb") as nand:
             fill_erased(nand, NAND_RAW_SIZE)
+        if preserve_boot_from is not None:
+            reserved_size = RESERVED_PHYSICAL_BLOCKS * RAW_BLOCK_SIZE
+            with preserve_boot_from.open("rb") as source, temp_path.open("r+b") as nand:
+                nand.write(source.read(reserved_size))
         with flat_path.open("rb") as flat, temp_path.open("r+b") as nand:
             for logical_block in range(LOGICAL_BLOCKS):
                 data = flat.read(BLOCK_DATA_SIZE)
@@ -172,12 +216,12 @@ def pack_image(flat_path: Path, nand_path: Path) -> int:
                 physical_block = RESERVED_PHYSICAL_BLOCKS + used_blocks
                 if physical_block >= PHYSICAL_BLOCKS:
                     raise ValueError("logical image needs more physical blocks than NAND provides")
-                oob = make_oob(logical_block)
                 nand.seek(physical_block * RAW_BLOCK_SIZE)
                 for page in range(PAGES_PER_BLOCK):
                     start = page * PAGE_DATA_SIZE
-                    nand.write(data[start : start + PAGE_DATA_SIZE])
-                    nand.write(oob)
+                    page_data = data[start : start + PAGE_DATA_SIZE]
+                    nand.write(page_data)
+                    nand.write(make_oob(logical_block, page_data))
                 used_blocks += 1
 
         os.replace(temp_path, nand_path)
@@ -496,7 +540,8 @@ def command_install(args: argparse.Namespace) -> None:
         args.encoding,
         replace_target=args.replace_target,
     )
-    pack_image(flat_path, args.output or args.nand)
+    pack_image(flat_path, args.output or args.nand,
+               preserve_boot_from=args.nand)
 
 
 def build_parser() -> argparse.ArgumentParser:

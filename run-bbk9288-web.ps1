@@ -12,7 +12,14 @@ param(
 
     [string]$RuntimeDir,
 
-    [string]$Nand
+    [string]$Nand,
+
+    [string]$BootRom,
+
+    [switch]$DirectKernelBoot,
+
+    [ValidatePattern('^0[xX][0-9A-Fa-f]{8}$')]
+    [string]$NandId
 )
 
 $ErrorActionPreference = "Stop"
@@ -57,6 +64,28 @@ if ([string]::IsNullOrWhiteSpace($Nand)) {
     throw "NAND image not found; specify nand-user.raw with -Nand."
 }
 $Nand = [System.IO.Path]::GetFullPath($Nand)
+if ($DirectKernelBoot -and $BootRom) {
+    throw "-DirectKernelBoot cannot be combined with -BootRom"
+}
+if (-not $DirectKernelBoot -and [string]::IsNullOrWhiteSpace($BootRom)) {
+    $BootRom = @(
+        (Join-Path $RuntimeDir "BOOT0.BIN"),
+        (Join-Path $root "BOOT0.BIN")
+    ) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+    if ([string]::IsNullOrWhiteSpace($BootRom)) {
+        throw "Native boot requires runtime\BOOT0.BIN; download and extract the native NAND release asset. Use -DirectKernelBoot only for legacy images."
+    }
+}
+if (-not [string]::IsNullOrWhiteSpace($BootRom)) {
+    $BootRom = [System.IO.Path]::GetFullPath($BootRom)
+    if (-not (Test-Path -LiteralPath $BootRom -PathType Leaf)) {
+        throw "BBK 9288 boot ROM not found: $BootRom"
+    }
+    if ([string]::IsNullOrWhiteSpace($NandId)) {
+        $NandId = '0xADDA8015'
+    }
+}
 $nandTool = Join-Path $root "scripts\bbk9288s_nand_image.py"
 $webServer = Join-Path $root "scripts\bbk9288_web_server.py"
 $webRoot = Join-Path $root "web"
@@ -118,6 +147,9 @@ Write-Host ""
 Write-Host "BBK 9288 Web is running:"
 Write-Host "  Local: http://127.0.0.1:$HttpPort/$query"
 Write-Host "  NAND:  $Nand"
+if ($BootRom) {
+    Write-Host "  ROM:   $BootRom (NAND ID $NandId)"
+}
 $addresses = Get-NetIPAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     Where-Object {
         $_.IPAddress -notlike "127.*" -and
@@ -130,6 +162,16 @@ foreach ($address in $addresses) {
 }
 Write-Host ""
 
+$bootArgs = @()
+if ($BootRom) {
+    $bootArgs += @('--boot-rom', $BootRom)
+} elseif ($DirectKernelBoot) {
+    $bootArgs += '--direct-kernel-boot'
+}
+if ($NandId) {
+    $bootArgs += @('--nand-id', $NandId)
+}
+
 Push-Location $root
 try {
     & $python $webServer `
@@ -140,7 +182,8 @@ try {
         --dist $webDist `
         --http-port $HttpPort `
         --websocket-port $WebSocketPort `
-        --qmp-port $QmpPort
+        --qmp-port $QmpPort `
+        @bootArgs
     if ($LASTEXITCODE -ne 0) {
         throw "Web server exited with code $LASTEXITCODE"
     }
