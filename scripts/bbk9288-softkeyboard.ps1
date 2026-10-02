@@ -263,7 +263,7 @@ $qRow = @()
 foreach ($letter in @("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P")) {
     $qRow += New-Key $letter $letter.ToLowerInvariant()
 }
-$qRow += New-Key "目录" "esc" 78
+$qRow += New-Key "目录" "f12" 78
 
 $aRow = @()
 foreach ($letter in @("A", "S", "D", "F", "G", "H", "J", "K", "L")) {
@@ -282,7 +282,7 @@ $functionRow = @(
     New-Key "帮助" "f11" 78
     New-Key "开始" "f5" 78
     New-Key "菜单" "f6" 78
-    New-Key "退出" "f12" 78
+    New-Key "退出" "esc" 78
     New-Key "删除" "delete" 78
     New-Key "输入法" "menu" 86
     New-Key "空格" "spc" 92

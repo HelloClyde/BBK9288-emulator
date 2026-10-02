@@ -95,7 +95,7 @@ for (const letter of "abcdefghijklmnopqrstuvwxyz") {
   };
 }
 Object.assign(keyMap, {
-  directory: { keysym: 0xff1b, code: "Escape" },
+  directory: { keysym: 0xffc9, code: "F12" },
   pronounce: { keysym: 0xffbe, code: "F1" },
   shift: { keysym: 0xffe1, code: "ShiftLeft" },
   pageUp: { keysym: 0xff55, code: "PageUp" },
@@ -103,14 +103,14 @@ Object.assign(keyMap, {
   help: { keysym: 0xffc8, code: "F11" },
   start: { keysym: 0xffc2, code: "F5" },
   systemMenu: { keysym: 0xffc3, code: "F6" },
-  exit9288: { keysym: 0xffc9, code: "F12" },
+  exit9288: { keysym: 0xff1b, code: "Escape" },
   delete: { keysym: 0xffff, code: "Delete" },
   inputMethod: { keysym: 0xff67, code: "ContextMenu" },
   space: { keysym: 0x20, code: "Space" },
 });
 
 const matrixPhysicalActions = {
-  Escape: "directory",
+  Escape: "exit9288",
   F1: "pronounce",
   F5: "start",
   F6: "systemMenu",
@@ -128,7 +128,7 @@ const matrixPhysicalActions = {
   ArrowRight: "right",
   ShiftLeft: "shift",
   ShiftRight: "shift",
-  F12: "exit9288",
+  F12: "directory",
 };
 for (const digit of "1234567890") {
   matrixPhysicalActions[`Digit${digit}`] = digit;
