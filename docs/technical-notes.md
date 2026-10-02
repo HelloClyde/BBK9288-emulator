@@ -157,6 +157,11 @@ Implemented pieces:
 - Board USB/VBUS presence at `0x01000022` bit 7. The `usb-connected` machine
   property defaults to `on`; the firmware uses this bit to select its external
   power path and suppress idle auto-power-off.
+- The Web launcher enables `shutdown-on-disabled-halt` for the S1C33 CPU.
+  Firmware power-off reaches a HALT with `PSR.IE=0`; ordinary timer IRQs cannot
+  wake it. QEMU now reports guest shutdown so the Web panel shows the device as
+  off and its power button can start it again. ROM idle HALTs with interrupts
+  enabled continue to wake normally.
 - `debug-usb-wakeup-ms` machine property, disabled by default, can set the USB
   interrupt factor after a host-time delay for wakeup testing.
 - `debug-port4-wakeup-ms` machine property, disabled by default, can set the

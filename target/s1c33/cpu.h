@@ -63,6 +63,7 @@ struct ArchCPU {
     CPUS1C33State env;
 
     bool exit_on_halt;
+    bool shutdown_on_disabled_halt;
     bool trace_psr;
     bool trace_calls;
     bool trace_exec;

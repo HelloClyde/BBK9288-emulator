@@ -614,5 +614,15 @@ G_NORETURN void helper_s1c33_halt(CPUS1C33State *env, uint32_t insn_pc)
                   "s1c33: HALT at pc=0x%08x next_pc=0x%08x\n",
                   insn_pc, env->pc);
     s1c33_log_cpu_state(env);
-    s1c33_enter_halt(env, cs, cpu->exit_on_halt, false);
+    /*
+     * The 9288 firmware disables interrupts before its final power-off HALT.
+     * Leaving QEMU alive here makes the last LCD frame look like a hung boot,
+     * because an ordinary timer IRQ cannot wake a CPU with PSR.IE cleared.
+     * Keep this opt-in so other S1C33 machines can still use an NMI wake.
+     */
+    s1c33_enter_halt(env, cs,
+                     cpu->exit_on_halt ||
+                     (cpu->shutdown_on_disabled_halt &&
+                      (env->psr & S1C33_PSR_IE) == 0),
+                     false);
 }

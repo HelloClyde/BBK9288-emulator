@@ -115,6 +115,8 @@ static ObjectClass *s1c33_cpu_class_by_name(const char *cpu_model)
 
 static const Property s1c33_cpu_properties[] = {
     DEFINE_PROP_BOOL("exit-on-halt", S1C33CPU, exit_on_halt, true),
+    DEFINE_PROP_BOOL("shutdown-on-disabled-halt", S1C33CPU,
+                     shutdown_on_disabled_halt, false),
     DEFINE_PROP_BOOL("trace-psr", S1C33CPU, trace_psr, false),
     DEFINE_PROP_BOOL("trace-calls", S1C33CPU, trace_calls, false),
     DEFINE_PROP_BOOL("trace-exec", S1C33CPU, trace_exec, false),

@@ -167,7 +167,7 @@ class QemuController:
             "-machine",
             machine,
             "-cpu",
-            "c33l05,exit-on-halt=off",
+            "c33l05,exit-on-halt=off,shutdown-on-disabled-halt=on",
             "-rtc",
             "base=localtime",
             "-display",
