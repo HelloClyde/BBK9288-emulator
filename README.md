@@ -8,7 +8,7 @@
 
 ## 效果预览
 
-启动后的 Web 控制台（9288 专用界面、320 × 240 LCD 和完整 53 键面板）：
+启动后的 Web 控制台（9288 专用界面、320 × 240 LCD、52 个面板键及独立电源键）：
 
 ![BBK 9288 Web 控制台](docs/assets/bbk9288-web.png)
 
@@ -38,9 +38,9 @@
 - S1C33 的 `INT`、`RETD`、`BRK`、`MIRROR` 和 `MAC` 指令。
 - VS1003 压缩音频数据通路；Windows 包通过 `ffplay.exe` 直接播放原固件
   从 NAND 读取并送往解码器的声音。
-- Web 控制台：noVNC 320 × 240 显示、完整 53 键面板、浏览器音频、
+- Web 控制台：noVNC 320 × 240 显示、52 个面板键、浏览器音频、
   电源控制和 NAND 文件管理。
-- Windows SDL 桌面窗口、可点击的 53 键软键盘及一键启动脚本。
+- Windows SDL 桌面窗口、可点击的 52 键软键盘及一键启动脚本。
 
 当前固件可进入 V1.5 词典桌面，显示词典、翻译、语法、阅读、作文等应用
 图标。已实测软键盘“确定”可关闭系统提示，方向键可移动日历选中框。
@@ -48,9 +48,9 @@ NAND 是可写的，并在运行过程中增量保存。
 
 ## 快速开始
 
-1. 从 [v9288-0.2.2 Release](https://github.com/HelloClyde/bbk9288-emulator/releases/tag/v9288-0.2.2)
-   下载 `bbk9288-emulator-v9288-0.2.2-windows-x64.zip` 和
-   `bbk9288-native-boot-nand-v9288-0.2.2.zip`。
+1. 从 [v9288-0.2.3 Release](https://github.com/HelloClyde/bbk9288-emulator/releases/tag/v9288-0.2.3)
+   下载 `bbk9288-emulator-v9288-0.2.3-windows-x64.zip` 和
+   `bbk9288-native-boot-nand-v9288-0.2.3.zip`。
 2. 先解压模拟器 ZIP，再把 NAND ZIP 解压到同一个目录；合并其中的
    `runtime` 文件夹即可，不需要改名或移动文件。
 3. 双击 `run-bbk9288-web.cmd`。默认从 `runtime/BOOT0.BIN` 执行原机 ROM，

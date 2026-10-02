@@ -172,8 +172,7 @@ const matrixRows = [
   ],
   [
     { label: "目录", key: "directory", weight: 1.2, role: "function" },
-    { label: "开始", key: "start", weight: 1.2, role: "function" },
-    { label: "菜单", key: "systemMenu", weight: 1.2, role: "function" },
+    { label: "词典图标", name: "词典图标（开始）", icon: "dictionary", key: "start", weight: 1.2, role: "function" },
     { label: "发音", key: "pronounce", weight: 1.2, role: "function" },
     { label: "输入法", key: "inputMethod", weight: 1.35, role: "function" },
     { label: "帮助", key: "help", weight: 1.2, role: "function" },
@@ -195,11 +194,15 @@ function buildMatrixKeyboard() {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "matrix-key";
-      button.textContent = definition.label;
+      if (definition.icon === "dictionary") {
+        button.innerHTML = '<svg class="dictionary-key-icon" viewBox="0 0 32 24" aria-hidden="true"><path d="M16 5c-4-2-8-2-13-1v15c5-1 9-1 13 1 4-2 8-2 13-1V4c-5-1-9-1-13 1ZM16 5v15M6 8c3-.4 5-.2 7 .7M19 8.7c2-.9 4-1.1 7-.7M6 12c3-.4 5-.2 7 .7M19 12.7c2-.9 4-1.1 7-.7"/></svg>';
+      } else {
+        button.textContent = definition.label;
+      }
       button.dataset.key = definition.key;
       button.dataset.role = definition.role || "key";
-      button.title = definition.label;
-      button.setAttribute("aria-label", definition.label);
+      button.title = definition.name || definition.label;
+      button.setAttribute("aria-label", definition.name || definition.label);
       button.style.setProperty("--key-weight", String(definition.weight || 1));
       if (definition.shiftToggle) {
         button.dataset.shiftToggle = "true";
@@ -210,8 +213,8 @@ function buildMatrixKeyboard() {
     }
     keyboardDeck.append(row);
   }
-  if (keyCount !== 53) {
-    throw new Error(`9288 Web keyboard must have 53 keys, got ${keyCount}`);
+  if (keyCount !== 52) {
+    throw new Error(`9288 Web keyboard must have 52 panel keys, got ${keyCount}`);
   }
 }
 

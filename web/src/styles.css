@@ -487,6 +487,17 @@ h1 {
   border-bottom: 3px solid #778185;
 }
 
+.dictionary-key-icon {
+  width: 26px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+  vertical-align: middle;
+}
+
 .matrix-key[data-role="confirm"] {
   border-bottom: 3px solid var(--teal);
 }

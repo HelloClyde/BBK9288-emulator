@@ -190,6 +190,40 @@ function Add-KeyRow {
         )
         $button.Tag = $key.QCode
 
+        if ($key.Mode -eq "dictionary") {
+            $button.Text = ""
+            $button.AccessibleName = "词典图标（开始）"
+            $button.Add_Paint({
+                param($sender, $paintEvent)
+                $cx = [int]($sender.ClientSize.Width / 2)
+                $cy = [int]($sender.ClientSize.Height / 2)
+                $pen = [System.Drawing.Pen]::new(
+                    [System.Drawing.Color]::FromArgb(32, 35, 38), 2
+                )
+                try {
+                    $leftPage = [System.Drawing.Point[]]@(
+                        [System.Drawing.Point]::new($cx, $cy - 9),
+                        [System.Drawing.Point]::new($cx - 12, $cy - 10),
+                        [System.Drawing.Point]::new($cx - 12, $cy + 7),
+                        [System.Drawing.Point]::new($cx, $cy + 9)
+                    )
+                    $rightPage = [System.Drawing.Point[]]@(
+                        [System.Drawing.Point]::new($cx, $cy - 9),
+                        [System.Drawing.Point]::new($cx + 12, $cy - 10),
+                        [System.Drawing.Point]::new($cx + 12, $cy + 7),
+                        [System.Drawing.Point]::new($cx, $cy + 9)
+                    )
+                    $paintEvent.Graphics.DrawLines($pen, $leftPage)
+                    $paintEvent.Graphics.DrawLines($pen, $rightPage)
+                    $paintEvent.Graphics.DrawLine(
+                        $pen, $cx, $cy - 9, $cx, $cy + 9
+                    )
+                } finally {
+                    $pen.Dispose()
+                }
+            })
+        }
+
         if ($key.Mode -eq "shift") {
             $script:shiftButton = $button
             $button.Add_Click({
@@ -210,7 +244,7 @@ function Add-KeyRow {
 Connect-BbkQmp
 
 $form = [System.Windows.Forms.Form]::new()
-$form.Text = "步步高 BBK 9288 — 53 键软键盘"
+$form.Text = "步步高 BBK 9288 — 52 键软键盘"
 $form.StartPosition = [System.Windows.Forms.FormStartPosition]::CenterScreen
 $form.ClientSize = [System.Drawing.Size]::new(1050, 365)
 $form.MinimumSize = [System.Drawing.Size]::new(1066, 404)
@@ -223,7 +257,7 @@ $header.Location = [System.Drawing.Point]::new(0, 0)
 $header.Size = [System.Drawing.Size]::new(1050, 48)
 
 $title = [System.Windows.Forms.Label]::new()
-$title.Text = "BBK 9288 原机布局 · 53 键"
+$title.Text = "BBK 9288 原机布局 · 52 键（不含电源）"
 $title.Location = [System.Drawing.Point]::new(14, 8)
 $title.AutoSize = $true
 $title.Font = [System.Drawing.Font]::new(
@@ -284,8 +318,7 @@ $zRow += New-Key "下翻" "pgdn" 78
 
 $functionRow = @(
     New-Key "目录" "f12" 78
-    New-Key "开始" "f5" 78
-    New-Key "菜单" "f6" 78
+    New-Key "词典图标" "f5" 78 "dictionary"
     New-Key "发音" "f1" 78
     New-Key "输入法" "menu" 86
     New-Key "帮助" "f11" 78
@@ -307,8 +340,8 @@ Add-KeyRow $keyboard $functionRow
 $keyCount = $numberRowTop.Count + $numberRowBottom.Count +
             $qRow.Count + $aRow.Count +
             $zRow.Count + $functionRow.Count
-if ($keyCount -ne 53) {
-    throw "软键盘布局错误：应为 53 键，实际为 $keyCount 键。"
+if ($keyCount -ne 52) {
+    throw "软键盘布局错误：应为 52 键，实际为 $keyCount 键。"
 }
 
 $qemuProcess = Get-Process -Id $QemuProcessId -ErrorAction SilentlyContinue
