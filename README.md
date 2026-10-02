@@ -48,9 +48,9 @@ NAND 是可写的，并在运行过程中增量保存。
 
 ## 快速开始
 
-1. 从 [v9288-0.2.1 Release](https://github.com/HelloClyde/bbk9288-emulator/releases/tag/v9288-0.2.1)
-   下载 `bbk9288-emulator-v9288-0.2.1-windows-x64.zip` 和
-   `bbk9288-native-boot-nand-v9288-0.2.1.zip`。
+1. 从 [v9288-0.2.2 Release](https://github.com/HelloClyde/bbk9288-emulator/releases/tag/v9288-0.2.2)
+   下载 `bbk9288-emulator-v9288-0.2.2-windows-x64.zip` 和
+   `bbk9288-native-boot-nand-v9288-0.2.2.zip`。
 2. 先解压模拟器 ZIP，再把 NAND ZIP 解压到同一个目录；合并其中的
    `runtime` 文件夹即可，不需要改名或移动文件。
 3. 双击 `run-bbk9288-web.cmd`。默认从 `runtime/BOOT0.BIN` 执行原机 ROM，
@@ -98,7 +98,8 @@ Copy-Item ..\9288-boot-capture\captures\2026-10-01-v3\BOOT0.BIN `
 ## Web 前端功能
 
 - 320 × 240 横屏 noVNC 显示，支持像素级缩放和全屏。
-- 与原机布局一致的 53 键面板；电脑键盘也可直接输入。
+- 参照真机照片排列的数字、字母和功能键；“目录”与“跳出”使用各自的固件键位，
+  电脑键盘也可直接输入。
 - 固件 VS1003 压缩音频流的浏览器播放和音量控制。
 - 模拟器启动、重启、连接状态和 USB 供电状态。
 - NAND 维护模式、目录浏览、上传、下载、重命名和删除。

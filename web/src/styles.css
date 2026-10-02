@@ -425,6 +425,12 @@ h1 {
   gap: 7px;
 }
 
+/* The real 9288 has a separate two-row number pad above its letter keys. */
+.matrix-row:nth-child(-n + 2) {
+  width: 46%;
+  margin-left: auto;
+}
+
 .matrix-key {
   min-width: 0;
   min-height: 43px;
@@ -441,10 +447,25 @@ h1 {
   user-select: none;
 }
 
+.matrix-row:nth-child(n + 3):nth-child(-n + 5) .matrix-key {
+  border-color: #22282b;
+  background: #2b3033;
+  color: #ffffff;
+}
+
+.matrix-row:nth-child(6) .matrix-key[data-role="direction"] {
+  border-radius: 50%;
+}
+
 .matrix-key:hover,
 .matrix-key:focus-visible {
   border-color: var(--ink);
   background: #ffffff;
+}
+
+.matrix-row:nth-child(n + 3):nth-child(-n + 5) .matrix-key:hover,
+.matrix-row:nth-child(n + 3):nth-child(-n + 5) .matrix-key:focus-visible {
+  background: #41494d;
 }
 
 .matrix-key.is-pressed,
@@ -452,7 +473,14 @@ h1 {
   transform: translateY(2px);
   border-color: #8b670f;
   background: #f5d15e;
+  color: #202324;
   box-shadow: inset 0 -1px 0 rgb(32 35 38 / 12%);
+}
+
+.matrix-row:nth-child(n + 3):nth-child(-n + 5) .matrix-key.is-pressed,
+.matrix-row:nth-child(n + 3):nth-child(-n + 5) .matrix-key.is-armed {
+  background: #f5d15e;
+  color: #202324;
 }
 
 .matrix-key[data-role="function"] {

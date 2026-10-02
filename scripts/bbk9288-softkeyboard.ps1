@@ -254,22 +254,26 @@ $keyboard.Padding = [System.Windows.Forms.Padding]::new(5, 3, 5, 3)
 $keyboard.AutoScroll = $false
 [void]$form.Controls.Add($keyboard)
 
-$numberRow = @()
-foreach ($number in @("1", "2", "3", "4", "5", "6", "7", "8", "9", "0")) {
-    $numberRow += New-Key $number $number
+$numberRowTop = @()
+$numberRowBottom = @()
+foreach ($number in @("1", "2", "3", "4", "5")) {
+    $numberRowTop += New-Key $number $number
+}
+foreach ($number in @("6", "7", "8", "9", "0")) {
+    $numberRowBottom += New-Key $number $number
 }
 
 $qRow = @()
 foreach ($letter in @("Q", "W", "E", "R", "T", "Y", "U", "I", "O", "P")) {
     $qRow += New-Key $letter $letter.ToLowerInvariant()
 }
-$qRow += New-Key "目录" "f12" 78
+$qRow += New-Key "删除" "delete" 78
 
 $aRow = @()
 foreach ($letter in @("A", "S", "D", "F", "G", "H", "J", "K", "L")) {
     $aRow += New-Key $letter $letter.ToLowerInvariant()
 }
-$aRow += New-Key "发音" "f1" 78
+$aRow += New-Key "空格" "spc" 78
 
 $zRow = @(New-Key "Shift" "shift" 78 "shift")
 foreach ($letter in @("Z", "X", "C", "V", "B", "N", "M")) {
@@ -279,27 +283,29 @@ $zRow += New-Key "上翻" "pgup" 78
 $zRow += New-Key "下翻" "pgdn" 78
 
 $functionRow = @(
-    New-Key "帮助" "f11" 78
+    New-Key "目录" "f12" 78
     New-Key "开始" "f5" 78
     New-Key "菜单" "f6" 78
-    New-Key "退出" "esc" 78
-    New-Key "删除" "delete" 78
+    New-Key "发音" "f1" 78
     New-Key "输入法" "menu" 86
-    New-Key "空格" "spc" 92
-    New-Key "确定" "ret" 78
+    New-Key "帮助" "f11" 78
+    New-Key "跳出" "esc" 92
+    New-Key "输入" "ret" 92
     New-Key "↑" "up" 54
     New-Key "←" "left" 54
     New-Key "↓" "down" 54
     New-Key "→" "right" 54
 )
 
-Add-KeyRow $keyboard $numberRow
+Add-KeyRow $keyboard $numberRowTop
+Add-KeyRow $keyboard $numberRowBottom
 Add-KeyRow $keyboard $qRow
 Add-KeyRow $keyboard $aRow
 Add-KeyRow $keyboard $zRow
 Add-KeyRow $keyboard $functionRow
 
-$keyCount = $numberRow.Count + $qRow.Count + $aRow.Count +
+$keyCount = $numberRowTop.Count + $numberRowBottom.Count +
+            $qRow.Count + $aRow.Count +
             $zRow.Count + $functionRow.Count
 if ($keyCount -ne 53) {
     throw "软键盘布局错误：应为 53 键，实际为 $keyCount 键。"

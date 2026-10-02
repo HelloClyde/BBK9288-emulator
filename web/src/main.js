@@ -139,20 +139,21 @@ for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
 }
 
 const matrixRows = [
-  [..."1234567890"].map((key) => ({ label: key, key })),
+  [..."12345"].map((key) => ({ label: key, key })),
+  [..."67890"].map((key) => ({ label: key, key })),
   [
     ..."QWERTYUIOP".split("").map((key) => ({
       label: key,
       key: key.toLowerCase(),
     })),
-    { label: "目录", key: "directory", weight: 1.25, role: "function" },
+    { label: "删除", key: "delete", weight: 1.25, role: "function" },
   ],
   [
     ..."ASDFGHJKL".split("").map((key) => ({
       label: key,
       key: key.toLowerCase(),
     })),
-    { label: "发音", key: "pronounce", weight: 1.25, role: "function" },
+    { label: "空格", key: "space", weight: 1.25 },
   ],
   [
     {
@@ -170,14 +171,14 @@ const matrixRows = [
     { label: "下翻", key: "pageDown", weight: 1.25, role: "function" },
   ],
   [
-    { label: "帮助", key: "help", weight: 1.2, role: "function" },
+    { label: "目录", key: "directory", weight: 1.2, role: "function" },
     { label: "开始", key: "start", weight: 1.2, role: "function" },
     { label: "菜单", key: "systemMenu", weight: 1.2, role: "function" },
-    { label: "退出", key: "exit9288", weight: 1.2, role: "exit" },
-    { label: "删除", key: "delete", weight: 1.2, role: "function" },
+    { label: "发音", key: "pronounce", weight: 1.2, role: "function" },
     { label: "输入法", key: "inputMethod", weight: 1.35, role: "function" },
-    { label: "空格", key: "space", weight: 1.55 },
-    { label: "确定", key: "enter", weight: 1.2, role: "confirm" },
+    { label: "帮助", key: "help", weight: 1.2, role: "function" },
+    { label: "跳出", key: "exit9288", weight: 1.5, role: "exit" },
+    { label: "输入", key: "enter", weight: 1.5, role: "confirm" },
     { label: "↑", key: "up", role: "direction" },
     { label: "←", key: "left", role: "direction" },
     { label: "↓", key: "down", role: "direction" },
